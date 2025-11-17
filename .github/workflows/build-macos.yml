@@ -1,0 +1,93 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [ master, main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-macos:
+    name: Build for macOS
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-apple-darwin
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Build release version
+      run: cargo build --release --target x86_64-apple-darwin
+    
+    - name: Create distribution directory
+      run: |
+        mkdir -p dist/DictNavi-macOS
+    
+    - name: Copy executable
+      run: |
+        cp target/x86_64-apple-darwin/release/DictNavi dist/DictNavi-macOS/
+        chmod +x dist/DictNavi-macOS/DictNavi
+    
+    - name: Copy words directory
+      run: |
+        if [ -d "words" ]; then
+          cp -r words dist/DictNavi-macOS/
+        fi
+    
+    - name: Create README
+      run: |
+        cat > dist/DictNavi-macOS/README.txt << 'EOF'
+        DictNavi - English Dictionary
+        =============================
+        
+        Usage:
+          1. Double-click DictNavi to start the application
+          2. If macOS shows a security warning, right-click and select "Open"
+          3. words directory contains dictionary data and index
+        
+        System Requirements:
+          - macOS 10.13 (High Sierra) or higher
+          - No additional runtime libraries required
+        EOF
+    
+    - name: Create ZIP archive
+      run: |
+        cd dist
+        zip -r DictNavi-macOS.zip DictNavi-macOS/
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: DictNavi-macOS
+        path: |
+          dist/DictNavi-macOS.zip
+          dist/DictNavi-macOS/
+    
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/DictNavi-macOS.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

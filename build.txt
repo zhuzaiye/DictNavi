@@ -1,0 +1,47 @@
+========================================
+DictNavi Windows Application Build Instructions
+========================================
+
+【Quick Start】
+-----------
+Double-click build-and-package.bat to complete build and package
+
+【Detailed Steps】
+-----------
+1. Build Application:
+   Run build.bat
+   - Compiles release version to target/release/DictNavi.exe
+   - First compilation may take 10-30 minutes (downloading dependencies)
+
+2. Package Application:
+   Run package.bat
+   - Copies executable and resource files to dist/DictNavi directory
+   - Includes words directory and .index index
+
+3. Distribute Application:
+   - Compress dist/DictNavi directory into ZIP file
+   - Users can extract and use directly, no installation required
+
+【System Requirements】
+-----------
+- Rust toolchain (https://www.rust-lang.org/)
+- Windows 7 or higher
+- At least 500MB disk space
+
+【Package Contents】
+-----------
+dist/DictNavi/
+├── DictNavi.exe      # Main program
+├── words/            # Dictionary data
+│   └── .index/       # Search index
+└── README.txt        # Usage instructions
+
+【Notes】
+-----------
+- words directory must be in the same directory as DictNavi.exe
+- Font files are compiled into the executable, no need to package separately
+- Users do not need to install any runtime libraries
+
+【More Information】
+-----------
+See BUILD.md for detailed build options and optimization suggestions

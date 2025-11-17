@@ -1,0 +1,55 @@
+{
+  "index_settings": {
+    "docstore_compression": "lz4",
+    "docstore_blocksize": 16384
+  },
+  "segments": [
+    {
+      "segment_id": "ee433536-9108-4b2d-ae89-9ce0c090efdf",
+      "max_doc": 8472,
+      "deletes": null
+    },
+    {
+      "segment_id": "72c68607-8d7f-4397-b11e-96509213813f",
+      "max_doc": 8431,
+      "deletes": null
+    },
+    {
+      "segment_id": "842f5a49-b8f8-48f8-8988-5e3b9493ebfa",
+      "max_doc": 8414,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "word",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "default"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "concise_definition",
+      "type": "text",
+      "options": {
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "json_data",
+      "type": "text",
+      "options": {
+        "stored": true,
+        "fast": false
+      }
+    }
+  ],
+  "opstamp": 25320
+}

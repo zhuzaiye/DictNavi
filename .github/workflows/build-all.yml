@@ -1,0 +1,190 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [ master, main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-windows:
+    name: Build for Windows
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          C:\Users\runneradmin\.cargo\bin\
+          C:\Users\runneradmin\.cargo\registry\index\
+          C:\Users\runneradmin\.cargo\registry\cache\
+          C:\Users\runneradmin\.cargo\git\db\
+          target\
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Build release version
+      run: cargo build --release
+    
+    - name: Create distribution directory
+      run: |
+        if (Test-Path "dist\DictNavi") { Remove-Item -Recurse -Force "dist\DictNavi" }
+        New-Item -ItemType Directory -Path "dist\DictNavi" -Force | Out-Null
+    
+    - name: Copy executable
+      run: |
+        Copy-Item "target\release\DictNavi.exe" "dist\DictNavi\"
+    
+    - name: Copy words directory
+      run: |
+        if (Test-Path "words") {
+          Copy-Item -Recurse "words" "dist\DictNavi\"
+        }
+    
+    - name: Create README
+      run: |
+        @"
+        DictNavi - English Dictionary
+        =============================
+        
+        Usage:
+          1. Double-click DictNavi.exe to start the application
+          2. words directory contains dictionary data and index
+          3. To update dictionary, replace JSON files in words directory
+             and rebuild index within the application
+        
+        System Requirements:
+          - Windows 7 or higher
+          - No additional runtime libraries required
+        
+        File Structure:
+          DictNavi.exe      - Main program
+          words\            - Dictionary data directory
+            .index\         - Search index (auto-generated)
+            *.json          - Word definition files
+        "@ | Out-File -FilePath "dist\DictNavi\README.txt" -Encoding utf8
+    
+    - name: Create ZIP archive
+      run: |
+        Compress-Archive -Path "dist\DictNavi\*" -DestinationPath "dist\DictNavi-Windows.zip" -Force
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: DictNavi-Windows
+        path: |
+          dist/DictNavi-Windows.zip
+          dist/DictNavi/
+
+  build-macos:
+    name: Build for macOS
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-apple-darwin
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Build release version
+      run: cargo build --release --target x86_64-apple-darwin
+    
+    - name: Create distribution directory
+      run: |
+        mkdir -p dist/DictNavi-macOS
+    
+    - name: Copy executable
+      run: |
+        cp target/x86_64-apple-darwin/release/DictNavi dist/DictNavi-macOS/
+        chmod +x dist/DictNavi-macOS/DictNavi
+    
+    - name: Copy words directory
+      run: |
+        if [ -d "words" ]; then
+          cp -r words dist/DictNavi-macOS/
+        fi
+    
+    - name: Create README
+      run: |
+        cat > dist/DictNavi-macOS/README.txt << 'EOF'
+        DictNavi - English Dictionary
+        =============================
+        
+        Usage:
+          1. Double-click DictNavi to start the application
+          2. If macOS shows a security warning, right-click and select "Open"
+          3. words directory contains dictionary data and index
+        
+        System Requirements:
+          - macOS 10.13 (High Sierra) or higher
+          - No additional runtime libraries required
+        EOF
+    
+    - name: Create ZIP archive
+      run: |
+        cd dist
+        zip -r DictNavi-macOS.zip DictNavi-macOS/
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: DictNavi-macOS
+        path: |
+          dist/DictNavi-macOS.zip
+          dist/DictNavi-macOS/
+
+  create-release:
+    name: Create Release
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: DictNavi-Windows
+        path: artifacts/windows
+    
+    - name: Download macOS artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: DictNavi-macOS
+        path: artifacts/macos
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/windows/DictNavi-Windows.zip
+          artifacts/macos/DictNavi-macOS.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
