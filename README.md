@@ -2,7 +2,7 @@
 
 A Rust-based English dictionary application for word lookup and content display.
 
-[image1](./dict_navi.png)
+![image1](./dict_navi.png)
 
 ## Features
 
