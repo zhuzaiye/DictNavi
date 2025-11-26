@@ -3,18 +3,6 @@
 version = 4
 
 [[package]]
-name = "DictNavi"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "serde",
- "serde_json",
- "tantivy",
- "tokio",
-]
-
-[[package]]
 name = "ab_glyph"
 version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -936,6 +924,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "dict_navi"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "serde",
+ "serde_json",
+ "tantivy",
+ "tokio",
 ]
 
 [[package]]

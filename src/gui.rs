@@ -1,8 +1,9 @@
-use crate::dictionary::Dictionary;
-use crate::models::WordDefinition;
 use eframe::egui;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
+
+use crate::dictionary::Dictionary;
+use crate::models::WordDefinition;
 
 pub struct DictNaviApp {
     dictionary: Arc<Dictionary>,
@@ -21,6 +22,11 @@ pub struct DictNaviApp {
     sync_status: Option<String>, // Status message for index building
     is_building_index: Arc<Mutex<bool>>, // Whether index is being built
     build_result: Arc<Mutex<Option<String>>>, // Result of index building
+    // Fields related to word list view
+    show_word_list: bool, // Whether to show the word list view
+    word_list_page: usize, // Current page number (0-indexed)
+    words_per_page: usize, // Number of words per page
+    word_list_cache: Vec<Option<WordDefinition>>, // Cache for current page word definitions
 }
 
 impl DictNaviApp {
@@ -40,6 +46,10 @@ impl DictNaviApp {
             sync_status: None,
             is_building_index: Arc::new(Mutex::new(false)),
             build_result: Arc::new(Mutex::new(None)),
+            show_word_list: false,
+            word_list_page: 0,
+            words_per_page: 50, // Default: 50 words per page
+            word_list_cache: Vec::new(),
         }
     }
 
@@ -113,6 +123,39 @@ impl DictNaviApp {
         self.suggestions.clear();
         self.keyboard_navigated = false;
     }
+
+    // Load word definitions for current page
+    fn load_word_list_page(&mut self) {
+        if let Err(_) = self.load_all_words() {
+            self.word_list_cache.clear();
+            return;
+        }
+
+        if let Some(ref words) = self.all_words {
+            let total_words = words.len();
+            if total_words == 0 {
+                self.word_list_cache.clear();
+                return;
+            }
+
+            let start_idx = self.word_list_page * self.words_per_page;
+            let end_idx = (start_idx + self.words_per_page).min(total_words);
+
+            // Clear cache and resize
+            self.word_list_cache.clear();
+            self.word_list_cache.reserve(end_idx - start_idx);
+
+            // Load word definitions for current page
+            for i in start_idx..end_idx {
+                let word = &words[i];
+                match self.dictionary.lookup_word(word) {
+                    Ok(Some(def)) => self.word_list_cache.push(Some(def)),
+                    Ok(None) => self.word_list_cache.push(None),
+                    Err(_) => self.word_list_cache.push(None),
+                }
+            }
+        }
+    }
 }
 
 impl eframe::App for DictNaviApp {
@@ -150,7 +193,7 @@ impl eframe::App for DictNaviApp {
         if self.show_settings_menu {
             if let Some(button_rect) = settings_button_rect {
                 let menu_pos = egui::pos2(
-                    button_rect.right() - 150.0, // Menu right aligned to button
+                    button_rect.right() - 100.0, // Menu right aligned to button
                     button_rect.bottom(),
                 );
                 
@@ -161,14 +204,27 @@ impl eframe::App for DictNaviApp {
                         egui::Frame::popup(ui.style())
                             .fill(ui.style().visuals.extreme_bg_color)
                             .show(ui, |ui| {
-                                ui.set_min_width(150.0);
+                                ui.set_min_width(100.0);
+
+                                // View all words option
+                                let view_words_button = ui.button("List Words");
+                                if view_words_button.clicked() {
+                                    self.show_settings_menu = false;
+                                    self.show_word_list = true;
+                                    self.word_list_page = 0;
+                                    self.word_list_cache.clear();
+                                    // Load first page
+                                    self.load_word_list_page();
+                                }
+
+                                ui.separator();
                                 
                                 // Build index option (asynchronous)
                                 let is_building = *self.is_building_index.lock().unwrap();
                                 let button_text = if is_building {
-                                    "Building index..."
+                                    "Indexing..."
                                 } else {
-                                    "Build index"
+                                    "Index Words"
                                 };
                                 
                                 let button = ui.add_enabled(!is_building, egui::Button::new(button_text));
@@ -199,6 +255,7 @@ impl eframe::App for DictNaviApp {
                                         }
                                     });
                                 }
+                                
                             });
                     });
                 
@@ -230,6 +287,100 @@ impl eframe::App for DictNaviApp {
                     }
                 });
                 ui.separator();
+            }
+
+            // Word list view
+            if self.show_word_list {
+                // Load all words if needed
+                if let Err(_) = self.load_all_words() {
+                    ui.colored_label(egui::Color32::RED, "Failed to load word list");
+                    return;
+                }
+
+                let total_words = self.all_words.as_ref().map(|w| w.len()).unwrap_or(0);
+                if total_words == 0 {
+                    ui.label("No words found");
+                    return;
+                }
+
+                let total_pages = (total_words + self.words_per_page - 1) / self.words_per_page;
+                let total_pages = total_pages.max(1); // At least 1 page
+                // Ensure page is within valid range
+                if self.word_list_page >= total_pages {
+                    self.word_list_page = total_pages - 1;
+                    self.load_word_list_page();
+                }
+                let current_page = self.word_list_page;
+
+                // Pagination controls
+                ui.horizontal(|ui| {
+                    ui.label(format!("Total {}, page {} / {}", total_words, current_page + 1, total_pages));
+                    
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Close button
+                        if ui.button("Close").clicked() {
+                            self.show_word_list = false;
+                            self.word_list_cache.clear();
+                        }
+
+                        // Next page button
+                        let can_next = current_page + 1 < total_pages;
+                        if ui.add_enabled(can_next, egui::Button::new("Next")).clicked() && can_next {
+                            self.word_list_page = current_page + 1;
+                            self.load_word_list_page();
+                        }
+                        
+                        // Previous page button
+                        let can_prev = current_page > 0;
+                        if ui.add_enabled(can_prev, egui::Button::new("Previous")).clicked() && can_prev {
+                            self.word_list_page = current_page - 1;
+                            self.load_word_list_page();
+                        }
+                    });
+                });
+                ui.separator();
+
+                // Display word list in scrollable area
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                    for word_def_opt in &self.word_list_cache {
+                        if let Some(word_def) = word_def_opt {
+                            ui.horizontal(|ui| {
+                                // Word
+                                ui.strong(&word_def.word);
+                                
+                                // Phonetic
+                                if let Some(phonetic) = &word_def.phonetic {
+                                    if !phonetic.is_empty() {
+                                        ui.label(format!("/{}/", phonetic));
+                                    }
+                                }
+                                
+                                // Meaning (prefer concise_definition, otherwise first meaning)
+                                if let Some(concise) = &word_def.concise_definition {
+                                    if !concise.is_empty() {
+                                        ui.colored_label(egui::Color32::from_rgb(0, 100, 0), concise);
+                                    }
+                                } else if let Some(meanings) = &word_def.meanings {
+                                    if let Some(first_meaning) = meanings.first() {
+                                        if let Some(explanation_cn) = &first_meaning.explanation_cn {
+                                            ui.colored_label(egui::Color32::from_rgb(0, 100, 0), explanation_cn);
+                                        } else {
+                                            ui.label(&first_meaning.explanation_en);
+                                        }
+                                    }
+                                }
+                            });
+                            ui.add_space(5.0);
+                        } else {
+                            ui.label("Loading failed");
+                            ui.add_space(5.0);
+                        }
+                    }
+                });
+
+                return; // Skip the search section when showing word list
             }
 
             // Search section with autocomplete
