@@ -5,6 +5,13 @@ use std::sync::{Arc, Mutex};
 use crate::dictionary::Dictionary;
 use crate::models::WordDefinition;
 
+// 主题枚举
+#[derive(Clone, Copy, PartialEq)]
+enum Theme {
+    Light,
+    Dark,
+}
+
 pub struct DictNaviApp {
     dictionary: Arc<Dictionary>,
     search_term: String,
@@ -27,6 +34,8 @@ pub struct DictNaviApp {
     word_list_page: usize, // Current page number (0-indexed)
     words_per_page: usize, // Number of words per page
     word_list_cache: Vec<Option<WordDefinition>>, // Cache for current page word definitions
+    // Theme setting
+    theme: Theme, // Current theme
 }
 
 impl DictNaviApp {
@@ -50,6 +59,7 @@ impl DictNaviApp {
             word_list_page: 0,
             words_per_page: 50, // Default: 50 words per page
             word_list_cache: Vec::new(),
+            theme: Theme::Light, // Default theme
         }
     }
 
@@ -160,6 +170,12 @@ impl DictNaviApp {
 
 impl eframe::App for DictNaviApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Apply theme
+        match self.theme {
+            Theme::Light => ctx.set_visuals(egui::Visuals::light()),
+            Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
+        }
+        
         // Check the result of asynchronous index building
         if let Ok(mut result) = self.build_result.lock() {
             if let Some(status) = result.take() {
@@ -174,7 +190,7 @@ impl eframe::App for DictNaviApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
         
-        // Top bar: settings button
+        // Top bar: settings button and theme toggle button
         let mut settings_button_rect = None;
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -184,6 +200,19 @@ impl eframe::App for DictNaviApp {
                     if settings_button.clicked() {
                         self.show_settings_menu = !self.show_settings_menu;
                     }
+
+                    // Theme toggle button
+                    let theme_button = ui.button(match self.theme {
+                        Theme::Light => "◐",
+                        Theme::Dark => "☀",
+                    });
+                    if theme_button.clicked() {
+                        self.theme = match self.theme {
+                            Theme::Light => Theme::Dark,
+                            Theme::Dark => Theme::Light,
+                        };
+                    }
+                    
                     settings_button_rect = Some(settings_button.rect);
                 });
             });
@@ -314,7 +343,7 @@ impl eframe::App for DictNaviApp {
 
                 // Pagination controls
                 ui.horizontal(|ui| {
-                    ui.label(format!("Total {}, page {} / {}", total_words, current_page + 1, total_pages));
+                    ui.label(format!("Total {} words, page {} / {}", total_words, current_page + 1, total_pages));
                     
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Close button
